@@ -1,26 +1,45 @@
-use std::io::{self, prelude::*, BufReader, Write};
-use std::net::TcpStream;
-use std::str;
+//导入标准库
+use std::io::{Error, Read, Write};
+use std::net::{TcpListener, TcpStream};//实现TCP功能的包
+use std::thread;
+use std::time;
+
+fn handle_client(mut stream: TcpStream) -> Result<(), Error>{
+    let mut buf = [0; 512]; //声明可擦变量buf,能够存储512个字节
+    
+    for _ in 0..1000 {
+        let bytes_read = stream.read(&mut buf)?;//读取字节流到bytes_read
+        println!("message coming");
+        if bytes_read == 0 {
+            return Ok(());
+        }
+
+        stream.write(&buf[..bytes_read])?;
+        thread::sleep(time::Duration::from_secs(1 as u64));
+    }
+
+    Ok(())
+}
 
 fn main() -> std::io::Result<()> {
-    let mut stream = TcpStream::connect("127.0.0.1:8080")?;
-    for _ in 0..10 {
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read from stdin");
-        stream
-            .write(input.as_bytes())
-            .expect("Failed to write to stream");
-        
-        let mut reader = BufReader::new(&stream);
-        let mut buffer: Vec<u8> = Vec::new();
-        reader
-            .read_until(b'\n', &mut buffer)
-            .expect("Could not read into buffer");
-        println!("{}", 
-            str::from_utf8(&buffer).expect("Could not write buffer as string"));
-        println!("");
+    
+    let listener = TcpListener::bind("127.0.0.1:8080")?;//监听tcp端口
+    let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();//动态数组
+
+    for stream in listener.incoming() {//循环执行监听的结果
+        let stream = stream.expect("failed!");
+        let handle = thread::spawn(move || {
+            handle_client(stream)
+		.unwrap_or_else(|error| eprintln!("{:?}", error));//输出报错
+        });//监听线程
+
+        thread_vec.push(handle);//push 变量handle到thread_vec
+        println!("we got connect!")
     }
+
+    for handle in thread_vec {
+        handle.join().unwrap();//处理handle
+    }
+
     Ok(())
 }
